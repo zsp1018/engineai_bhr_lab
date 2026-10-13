@@ -1,205 +1,168 @@
-# engineai_rl_lab
-[![IsaacSim](https://img.shields.io/badge/IsaacSim-5.1.0-silver.svg)](https://docs.omniverse.nvidia.com/isaacsim/latest/overview.html)
-[![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.3.2-silver)](https://isaac-sim.github.io/IsaacLab)
+# engineai_bhr_lab
 
-中文|[English](README_EN.md)
+基于 [EngineAI Robotics / engineai_rl_lab](https://github.com/engineai-robotics/engineai_rl_lab) 的 PM01 跑步 AMP 实验项目。主要围绕直线跑步、左右转弯、低速与停止行为进行训练，并提供参考动作处理、策略回放、MuJoCo 视频录制和 SDK sim2sim 流程。
 
-## 概览
-本项目提供了一套基于Isaac Lab的强化学习环境，目前已经支持众擎PM01、T800机器人，实现的任务包括whole body tracking。
+原项目的 T800、whole body tracking 代码仍保留。本 README 以 PM01 跑步为主；[英文文档](README_EN.md) 目前保留上游说明，尚未同步本分支的跑步流程。`docs/` 中原有 GIF 为上游演示，不代表本分支模型的验证结果。
 
-[演示视频](https://www.bilibili.com/video/BV14GTk6UE9o/?share_source=copy_web&vd_source=74098b4d7182a602fcb3a63bb054e83f)
+## 跑步仿真效果
 
-|Robot|Training| Sim2Sim |Deploy|
-|:--------:|:--------:|:--------:|:--------:|
-|||**whole body tracking**|||
-|**T800**|<img src="./docs/train.gif" height="180"/>|<img src="./docs/sim2sim.gif" height="180"/>|<img src="./docs/deploy.gif" height="180"/>|
-|**PM01**|<img src="./docs/train_pm.gif" height="180"/>|<img src="./docs/sim2sim_pm.gif" height="180"/>|<img src="./docs/deploy_pm.gif" height="180"/>|
-|||**amp**|||
-|**PM01**|<img src="./docs/amp-pm-train.gif" height="180"/>|<img src="./docs/amp-pm-mujoco.gif" height="180"/>|<img src="./docs/amp-pm-deploy.gif" height="180"/>|
+以下为本项目的跑步仿真效果，非真机演示。
 
-## 安装
-### 安装Isaac Lab
-本仓库基于Isaac Lab2.3.2的commit `c22775241e28f465fe345fa1a482ad6d29d712b0`进行开发,不同版本之间代码可能不通用。关于Isaac Lab的详细安装步骤，请参阅其官方安装指南[Isaac Lab](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html)
+| 仿真效果一 | 仿真效果二 |
+|:---:|:---:|
+| <img src="docs/ezgif.com-video-to-gif-converter.gif" alt="PM01 跑步仿真效果一" width="480"/> | <img src="docs/ezgif.com-video-to-gif-converter(1).gif" alt="PM01 跑步仿真效果二" width="480"/> |
 
-### 安装engineai_rl_lab
-1. 从github克隆engineai_rl_lab
+## 当前实现
+
+- 任务：`AMP-Flat-PM01-v1`，IsaacLab 训练，PPO + AMP。
+- 跑步参考：直跑与左右转弯各 10 秒，转弯版本的目标偏航角速度为 ±1.2 rad/s。
+- 辅助参考：原慢走动作的前 4 秒、后 4 秒；这些片段不等同于纯站立动作。
+- 脚间距奖励：跑动指令下惩罚左右脚踝横向间距小于 0.2 m，不设上限；测量的是节点间距，不是鞋边净空。
+- 支持无相机策略运行并保存 NPZ，再用 MuJoCo 录制，避免依赖 Isaac Sim RTX 视频渲染。
+
+当前默认速度指令为前进 1～3 m/s、转向 ±1.2 rad/s，随机站立比例为 0.1；AMP 默认 `style_reward_scale=7.5`、`task_style_lerp=0.35`。命令行可覆盖这些值，以每次训练保存的 `params/env.yaml`、`params/agent.yaml` 为准。
+
+目前无条件 AMP 模式下，零指令仍会获得风格奖励；停止能力需要单独验证。当前 checkpoint 保存逻辑未包含 AMP 判别器状态，续训时判别器会重新初始化。本文不将这两项描述为已修复功能。
+
+## 安装与资产
+
+上游基于 Isaac Sim 5.1 / IsaacLab 2.3.2 开发，IsaacLab 基准提交为 `c22775241e28f465fe345fa1a482ad6d29d712b0`。请先准备匹配的 IsaacLab 环境。
+
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/engineai-robotics/engineai_rl_lab.git
-# 2.下载大型资产
-cd engineai_rl_lab
+git clone https://github.com/zsp1018/engineai_bhr_lab.git
+cd engineai_bhr_lab
 git lfs install
 git lfs pull
-```
-2. 安装engineai_rl_lab
-```bash
-# 请确保已经激活isaaclab环境
-cd engineai_rl_lab
-pip install -e source/engineai_rl_lab
-# 安装mnn库
-pip install mnn
+
+# 在已配置 IsaacLab 的 Python 环境中
+python -m pip install -e source/engineai_rl_lab
+python -m pip install mujoco imageio imageio-ffmpeg tensorboard
 ```
 
-## 训练
-### whole body tracking
-1. 将csv文件转换npz文件
+`datasets/amp/pm01/data` 是训练数据目录，纳入版本管理；克隆后必须获取 LFS 实体文件。运行还需要完整的 PM01 USD 资产，检查 `source/engineai_rl_lab/engineai_rl_lab/assets/pm01/`。如果该目录未随仓库提供，需从上游补齐，包括其 configuration 引用文件。
 
-> wholoe body tracking的动作数据的第一帧和最后一帧的机器人关节位置需要和pd stand下的基本一致，这有利于切换策略(模式)时的动作流畅性。
+本机使用 `env_isaaclab`。`train_local.sh` / `play_local.sh` 是本机依赖启动脚本，要求以下本地目录存在：
+
+- `.deps/rsl_rl_5`：rsl-rl-lib 5.0.0。
+- `.deps/warp_1_8_1`：warp-lang 1.8.1。
+- `.deps/cuda_driver`：用于本机 CUDA 驱动动态库查找。
+
+`.deps` 不应作为跨机器可用环境直接分发。新机器需先配置依赖；已有兼容环境可直接运行对应的 `train.py` / `play.py`。SDK 和驱动路径同样需要按机器调整。
+
+## 跑步参考数据
+
+训练显式指定 [dataset_run_three.yaml](datasets/amp/pm01/config/dataset_run_three.yaml)。文件名沿用早期命名，目前包含 **5 段**动作：
+
+| NPZ 文件 | 时长 | 权重 |
+|---|---:|---:|
+| `run2_subject1_straight_loop_10s_symmetric.npz` | 10 s | 1.0 |
+| `run2_subject1_left_turn_loop_10s_symmetric_1p2.npz` | 10 s | 1.0 |
+| `run2_subject1_right_turn_loop_10s_symmetric_1p2.npz` | 10 s | 1.0 |
+| `walk_straight_slow_001_Skeleton9_first_4s.npz` | 4 s | 0.5 |
+| `walk_straight_slow_001_Skeleton9_last_4s.npz` | 4 s | 0.5 |
+
+无条件采样时按 YAML 权重选择片段，不按时长分配：三段跑步各约 25%，两段慢走各约 12.5%。修改数据配置后需重新启动训练才能加载。
+
+紧凑 NPZ 包含 `fps`、`root_pos`、`root_rot`（xyzw）和 `dof_pos`。上述未命名 PM01 文件的关节列为 SDK J00～J23 顺序，加载器通过 YAML 的 `dof_indices` 对齐训练关节，并按 `zero_dof_indices` 处理腰部。不要随意删除映射。
+
+左右转轨迹是路径和根节点朝向的运动学增强，保持原关节动作，尚未验证对应急转动作的动态平衡；播放正常不等于策略可执行。
+
+## 训练与续训
+
+以下命令在项目根目录、已准备好本机依赖的环境中运行：
 
 ```bash
-# csv文件转换为npz文件,npz文件在同一目录下
-# PM01
-python scripts/tracking/csv_to_npz.py --robot pm01 --input_fps 30 -f datasets/tracking/pm01/dance.csv
-# T800
-python scripts/tracking/csv_to_npz.py --robot t800 --input_fps 30 -f datasets/tracking/t800/dance_t800.csv
+conda activate env_isaaclab
 
-# 重放npz文件
-# PMm01
-python scripts/tracking/replay_npz.py --robot pm01 --input_file datasets/tracking/pm01/dance.npz
-# T800
-python scripts/tracking/replay_npz.py --robot t800 --input_file datasets/tracking/t800/dance_t800.npz
+bash scripts/amp/train_local.sh \
+  --task AMP-Flat-PM01-v1 \
+  --headless \
+  --num_envs 4096 \
+  --run_name pm01_running \
+  --max_iterations 20000 \
+  --logger tensorboard \
+  agent.amp.dataset_path=datasets/amp/pm01/config/dataset_run_three.yaml \
+  'env.commands.base_velocity.ranges.lin_vel_x=[1.0,3.0]' \
+  'env.commands.base_velocity.ranges.lin_vel_y=[0.0,0.0]' \
+  'env.commands.base_velocity.ranges.ang_vel_z=[-1.2,1.2]' \
+  env.commands.base_velocity.rel_standing_envs=0.1 \
+  env.commands.base_velocity.heading_command=False
 ```
 
-2. 训练
+续训时，在上面命令中增加以下参数，替换为自己的训练目录和模型名：
+
 ```bash
-# PM01
-python scripts/tracking/train.py --task Tracking-Flat-PM01-Wo-State-Estimation-v0 --headless --num_envs 4096 --motion_file datasets/tracking/pm01/dance.npz
-
-# T800
-python scripts/tracking/train.py --task Tracking-Flat-T800-Wo-State-Estimation-v0 --headless --num_envs 4096 --motion_file datasets/tracking/t800/dance_t800.npz
-
-# 查看训练日志
-python -m tensorboard.main --logdir logs
+--resume \
+--load_run RUN_DIRECTORY \
+--checkpoint model_20000.pt
 ```
 
-3. 验证训练效果并导出策略
-```bash
-# PM01
-python scripts/tracking/play.py --task Tracking-Flat-PM01-Wo-State-Estimation-v0 --num_envs 1 --motion_file datasets/tracking/pm01/dance.npz --load_run 2026-06-23_09-58-43 --checkpoint dance.pt
+`--max_iterations` 表示本次额外训练轮数。模型加载不会自动恢复旧 YAML 的全部超参数；需要保持的参数应显式传入。新日志位于 `logs/rsl_rl/amp_velocity_flat_pm01/` 下的新时间戳目录。GPU 资源不足时可降低 `--num_envs`。
 
-# T800
-python scripts/tracking/play.py --task Tracking-Flat-T800-Wo-State-Estimation-v0 --num_envs 1 --motion_file datasets/tracking/t800/dance_t800.npz --load_run 2026-06-28_20-47-15 --checkpoint dance.pt
+```bash
+# 查看训练曲线，浏览器打开 http://localhost:6006
+tensorboard --logdir logs/rsl_rl/amp_velocity_flat_pm01 --port 6006
 ```
 
-### AMP
+重点观察速度跟踪误差、`Step_Reward/style_reward`、判别器得分、终止比例，并结合视频判断。风格奖励数值不是动作相似度百分比。
 
-1. 检查参考动作
+## 策略回放与视频录制
 
-训练前建议先在 Isaac Lab 中重放数据，检查根节点位姿、关节顺序、帧率及脚底与地面的接触是否正常。`--input_file` 用于检查单个动作，`--input_folder` 会按文件名顺序播放目录中的所有 NPZ 文件。
+替换 `RUN_DIRECTORY` 和 checkpoint。下面固定前进 2.8 m/s、左转 0.4 rad/s，运行 1000 个控制步（当前配置约 10 秒）：
 
 ```bash
-# PM01：播放数据集中的所有动作
-python scripts/amp/replay_npz.py --robot pm01 --input_folder datasets/amp/pm01/data
-
-# T800：播放数据集中的所有动作
-python scripts/amp/replay_npz.py --robot t800 --input_folder datasets/amp/t800/data
-
-# 单个动作示例
-python scripts/amp/replay_npz.py --robot pm01 --input_file datasets/amp/pm01/data/walk_001_Skeleton9.npz
+bash scripts/amp/play_local.sh \
+  --task AMP-Flat-PM01-v1 \
+  --num_envs 1 --headless --skip_export \
+  --load_run RUN_DIRECTORY \
+  --checkpoint model_20000.pt \
+  --record_npz videos/pm01_policy.npz \
+  --video_length 1000 \
+  agent.amp.dataset_path=datasets/amp/pm01/config/dataset_run_three.yaml \
+  'env.commands.base_velocity.ranges.lin_vel_x=[2.8,2.8]' \
+  'env.commands.base_velocity.ranges.lin_vel_y=[0.0,0.0]' \
+  'env.commands.base_velocity.ranges.ang_vel_z=[0.4,0.4]' \
+  env.commands.base_velocity.rel_standing_envs=0.0 \
+  env.commands.base_velocity.heading_command=False
 ```
 
-2. 训练
+`--record_npz` 保存模型在 IsaacLab 中实际产生的轨迹。转速正值左转，负值右转，零值直跑；目标速度不等于实际速度。测试停止时将三个速度范围全部设为 `[0.0,0.0]`。
 
 ```bash
-# PM01
-python scripts/amp/train.py --task AMP-Flat-PM01-v1 --headless --num_envs 4096
-
-# T800
-python scripts/amp/train.py --task AMP-Flat-T800-v1 --headless --num_envs 4096
-
-# 查看训练曲线
-python -m tensorboard.main --logdir logs/rsl_rl
+python scripts/amp/record_npz_mujoco.py \
+  --input_file videos/pm01_policy.npz \
+  --video videos/pm01_policy_front.mp4 \
+  --view front --fps 30
 ```
 
-3. 验证训练效果并导出策略
+录制器默认使用 `~/engineai_robotics_native_sdk/assets/resource/pm01_edu.xml`，可通过 `--model` 指定其他路径。需要可用的 MuJoCo EGL 渲染环境。本机若已准备 `.deps/egl/10_nvidia.json`，可在录制命令前添加 `__EGL_VENDOR_LIBRARY_FILENAMES="$PWD/.deps/egl/10_nvidia.json"`。
+
+`--view front` 为正前方朝向跟随视角，容易掩盖转弯；`--view default` 固定镜头方位并跟随位置。查看参考动作时，把 `--input_file` 换成数据集里的 NPZ 即可。
+
+**这个流程是轨迹渲染，不是策略在 MuJoCo 中闭环运行的 sim2sim。**
+
+## 导出与 MuJoCo sim2sim
+
+1. 运行上述 `play_local.sh` 时去掉 `--skip_export`，可将 `--video_length` 改为 `1`。脚本导出 `exported/model_XXXXX.onnx`；安装 MNN 后还会尝试转换同名 `.mnn`，务必确认转换成功并实际生成文件。
+2. 安装 [engineai_robotics_native_sdk](https://github.com/engineai-robotics/engineai_robotics_native_sdk)，将 MNN 放入 `assets/config/pm01_edu/rl_lab/policies/`，修改 `rl_lab/default.yaml` 的 `policy_file` 指向该文件。替换已有策略前先备份。
+3. 核对 SDK 的观测顺序、历史长度、关节映射、动作缩放、默认角度、PD 参数及控制周期与训练一致。AMP 跑步策略不需要配置 tracking 的参考轨迹文件。
+4. 分别在 SDK 容器中的三个终端运行：
 
 ```bash
-# PM01
-python scripts/amp/play.py --task AMP-Flat-PM01-v1 --num_envs 1 \
-  --load_run RUN_DIRECTORY --checkpoint model_19999.pt
-
-# T800
-python scripts/amp/play.py --task AMP-Flat-T800-v1 --num_envs 1 \
-  --load_run RUN_DIRECTORY --checkpoint model_19999.pt
-```
-
-## 部署
-### 安装engineai_robotics_native_sdk
-仿真与真机部署均依赖安装engineai_robotics_native_sdk，具体安装教程请参阅[engineai_robotics_native_sdk](https://github.com/engineai-robotics/engineai_robotics_native_sdk)
-
-### Sim2Sim
-1. 数据准备
-- 将`logs/rsl_rl/xx_flat/xxxx-xx-xx/exported/policy.mnn`复制到`assets/config/xxx/rl_dance_example(rl_lab)/policies`目录下
-- 将npz动作文件复制到`assets/config/xxx/rl_dance_example/trajectories`目录下
-- 修改`assets/config/xxx/rl_dance_example(rl_lab)/default.yaml`文件内的`policy_file`、`trajectory_file_npz`的文件名
-
-2. 运行仿真
-```bash
-# 终端1：运行mujoco仿真环境
-# 进入容器
-engineai_robotics_env
+# 终端一：MuJoCo
 ./scripts/run_mujoco.sh pm01_edu
-# ./scripts/run_mujoco.sh t800
 
-# 终端2：运行控制程序
-# 进入容器
-engineai_robotics_env
+# 终端二：控制器，明确使用仿真平台
+export ENGINEAI_ROBOTICS_PLATFORM=mujoco
 ./run.sh pm01_edu
-# ./run.sh t800
 
-# 终端3：启动虚拟手柄或使用遥控器
-# 进入容器后再启动python程序
-engineai_robotics_env
+# 终端三：虚拟手柄
 python3 tools/virtual_gamepad/virtual_gamepad.py
 ```
-![手柄控制界面](docs/gamepad.png)
-LB+X进入amp行走测试，RB+X进入whole body tracking测试
 
-遥控器操作请参阅[engineai_robotics_native_sdk](https://github.com/engineai-robotics/engineai_robotics_native_sdk)中的键位。
-> 进入mujoco后机器人会自动倒地，此时应切换到pd stand模式使机器人关节恢复到初始位置(仅仿真环境可以这样操作),按下键盘中的Enter即可重置mujoco环境，使机器人处于站立状态，这时可进入dance模式。机器人执行完动作之后自动会切换到walk状态。
+每个终端先执行 `engineai_robotics_env` 进入容器，并切换到 SDK 根目录。按 SDK 当前状态机进入阻尼、PD 站立，再进入 `rl_lab`；本机 PM01 配置依次为 `LB+RB`、`LB+A`、`LB+X`。键位以所安装 SDK 的配置为准。
 
-### Sim2Real
-1. 编辑[engineai_robotics_native_sdk](https://github.com/engineai-robotics/engineai_robotics_native_sdk)中的`install.sh` 中的要部署目标机器人参数：
-```bash
-remote_user="user"
-remote_host="192.168.0.163"
-remote_dir="~/projects/engineai_robotics"
-```
-
-2. 执行安装：
-```bash
-# 进入容器
-engineai_robotics_env
-# 安装程序
-./install.sh pm01_edu robot
-# ./install.sh t800 robot
-```
-
-3. 真机运行
->  **安全提示：** 
-> - 确保场地空旷，所有人员与机器人保持安全距离
-> - 若机器人动作异常，随时快速停止（按急停键或切回 `passive` 模式）
-> - 建议先用吊架吊起机器人，在进入 `pd_stand` 模式之后放到地上，再切入行走模式
-
-**运行前准备：**
-- 利用急停按键(pm01)或遥控器(t800)使能机器人的电机系统
-- 连接机器人热点
-
-**启动步骤：**
-```bash
-# 1. SSH 连接机器人（Nezha）
-ssh user@192.168.0.163
-
-# 2. 暂停自启动的运控程序，否则无法启动native_sdk
-sudo systemctl stop robotics.service
-
-# 3. 启动 native_sdk(确保已经使能电机系统)
-cd ~/projects/engineai_robotics
-sudo ./run_robot.sh pm01_edu
-# sudo ./run_robot.sh t800
-
-# 4. 使用遥控器切换模式，进入dance或amp模式
-```
+本分支主要用于跑步训练与仿真验证，未将当前跑步模型声明为已完成真机验证。真机部署请依据 SDK 文档和实际测试结果进行。
 
 ## 许可证
 本项目采用 **BSD 3-Clause License** 开源协议。详见 [LICENSE](LICENSE.txt) 文件。
