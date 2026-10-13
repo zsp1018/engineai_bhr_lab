@@ -1,0 +1,11 @@
+{
+  "source": "datasets/amp/pm01/data/run2_subject1_straight_loop_10s_symmetric.npz",
+  "fps": 100.0,
+  "frames": 1000,
+  "duration_seconds": 10.0,
+  "yaw_rate_rad_s": 1.2,
+  "measured_mean_yaw_rate": 1.2,
+  "mean_horizontal_speed": 2.8385649422044854,
+  "method": "Rotate horizontal steps by midpoint world yaw; premultiply root quaternion by world yaw. Joint motion and root height unchanged.",
+  "limitation": "Kinematic augmentation; foot contact and balance not corrected."
+}

@@ -1,0 +1,9 @@
+{
+  "source": "datasets/amp/pm01/data/run2_subject1_straight_loop_10s.npz",
+  "cycle_seconds": 0.76,
+  "method": "Leg joints J00..J11: 75% original + 25% mirrored opposite leg shifted half a gait cycle. Pitch preserved under reflection; roll/yaw negated. Root and upper body unchanged.",
+  "bilateral_rms_before_deg": 11.576312888019741,
+  "bilateral_rms_after_deg": 5.7881564440098705,
+  "max_leg_correction_deg": 8.774805925304928,
+  "limitation": "Joint-space symmetry only; foot contacts and physical balance unverified."
+}

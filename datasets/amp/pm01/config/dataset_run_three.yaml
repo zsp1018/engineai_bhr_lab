@@ -1,0 +1,37 @@
+motions:
+- file: ../data/run2_subject1_straight_loop_10s_symmetric.npz
+  weight: 1.0
+- file: ../data/run2_subject1_left_turn_loop_10s_symmetric_1p2.npz
+  weight: 1.0
+- file: ../data/run2_subject1_right_turn_loop_10s_symmetric_1p2.npz
+  weight: 1.0
+- file: ../data/walk_straight_slow_001_Skeleton9_first_4s.npz
+  weight: 0.5
+- file: ../data/walk_straight_slow_001_Skeleton9_last_4s.npz
+  weight: 0.5
+dof_indices:
+- 0
+- 6
+- 12
+- 1
+- 7
+- 13
+- 18
+- 2
+- 8
+- 14
+- 19
+- 3
+- 9
+- 15
+- 20
+- 4
+- 10
+- 16
+- 21
+- 5
+- 11
+- 17
+- 22
+zero_dof_indices:
+- 2
